@@ -80,6 +80,11 @@ VALUE must be a number or string.  If absent,
 VALUE must be a string.  If absent, `rcirc-default-user-name' is
 used.
 
+`:password'
+
+VALUE must be a string.  If absent, no PASS command will be sent
+to the server.
+
 `:full-name'
 
 VALUE must be a string.  If absent, `rcirc-default-full-name' is
@@ -94,6 +99,7 @@ connected to automatically."
 		:value-type (plist :options ((:nick string)
 					     (:port integer)
 					     (:user-name string)
+					     (:password string)
 					     (:full-name string)
 					     (:channels (repeat string)))))
   :group 'rcirc)
@@ -380,6 +386,8 @@ If ARG is non-nil, instead prompt for connection parameters."
 	     (nick (read-string "IRC Nick: "
 				(or (plist-get server-plist :nick)
 				    rcirc-default-nick)))
+             (password (read-passwd "IRC Password: "
+                                      (plist-get server-plist 'password)))
 	     (channels (split-string
 			(read-string "IRC Channels: "
 				     (mapconcat 'identity
@@ -387,9 +395,13 @@ If ARG is non-nil, instead prompt for connection parameters."
 							   :channels)
 						" "))
 			"[, ]+" t)))
+
+        (when (= 0 (length password))
+          (setq password nil))
+
 	(rcirc-connect server port nick rcirc-default-user-name
 		       rcirc-default-full-name
-		       channels))
+		       channels password))
     ;; connect to servers in `rcirc-server-alist'
     (let (connected-servers)
       (dolist (c rcirc-server-alist)
@@ -400,7 +412,8 @@ If ARG is non-nil, instead prompt for connection parameters."
 			     rcirc-default-user-name))
 	      (full-name (or (plist-get (cdr c) :full-name)
 			     rcirc-default-full-name))
-	      (channels (plist-get (cdr c) :channels)))
+	      (channels (plist-get (cdr c) :channels))
+              (password (plist-get (cdr c) :password)))
 	  (when server
 	    (let (connected)
 	      (dolist (p (rcirc-process-list))
@@ -409,7 +422,7 @@ If ARG is non-nil, instead prompt for connection parameters."
 	      (if (not connected)
 		  (condition-case e
 		      (rcirc-connect server port nick user-name
-				     full-name channels)
+				     full-name channels password)
 		    (quit (message "Quit connecting to %s" server)))
 		(with-current-buffer (process-buffer connected)
 		  (setq connected-servers
@@ -441,7 +454,7 @@ If ARG is non-nil, instead prompt for connection parameters."
 
 ;;;###autoload
 (defun rcirc-connect (server &optional port nick user-name full-name
-			     startup-channels)
+			     startup-channels password)
   (save-excursion
     (message "Connecting to %s..." server)
     (let* ((inhibit-eol-conversion)
@@ -490,6 +503,8 @@ If ARG is non-nil, instead prompt for connection parameters."
       (add-hook 'auto-save-hook 'rcirc-log-write)
 
       ;; identify
+      (when password
+        (rcirc-send-string process (concat "PASS " password)))
       (rcirc-send-string process (concat "NICK " nick))
       (rcirc-send-string process (concat "USER " user-name
                                       " hostname servername :"
