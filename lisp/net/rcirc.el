@@ -80,6 +80,11 @@ VALUE must be a number or string.  If absent,
 VALUE must be a string.  If absent, `rcirc-default-user-name' is
 used.
 
+`:password'
+
+VALUE must be a string.  If absent, no PASS command will be sent
+to the server.
+
 `:full-name'
 
 VALUE must be a string.  If absent, `rcirc-default-full-name' is
@@ -94,6 +99,7 @@ connected to automatically."
 		:value-type (plist :options ((:nick string)
 					     (:port integer)
 					     (:user-name string)
+					     (:password string)
 					     (:full-name string)
 					     (:channels (repeat string)))))
   :group 'rcirc)
@@ -392,6 +398,8 @@ If ARG is non-nil, instead prompt for connection parameters."
 				(or (plist-get server-plist :nick)
 				    rcirc-default-nick)
 				'rcirc-nick-name-history))
+             (password (read-passwd "IRC Password: "
+                                      (plist-get server-plist 'password)))
 	     (channels (split-string
 			(read-string "IRC Channels: "
 				     (mapconcat 'identity
@@ -399,9 +407,13 @@ If ARG is non-nil, instead prompt for connection parameters."
 							   :channels)
 						" "))
 			"[, ]+" t)))
+
+        (when (= 0 (length password))
+          (setq password nil))
+
 	(rcirc-connect server port nick rcirc-default-user-name
 		       rcirc-default-full-name
-		       channels))
+		       channels password))
     ;; connect to servers in `rcirc-server-alist'
     (let (connected-servers)
       (dolist (c rcirc-server-alist)
@@ -412,7 +424,8 @@ If ARG is non-nil, instead prompt for connection parameters."
 			     rcirc-default-user-name))
 	      (full-name (or (plist-get (cdr c) :full-name)
 			     rcirc-default-full-name))
-	      (channels (plist-get (cdr c) :channels)))
+	      (channels (plist-get (cdr c) :channels))
+              (password (plist-get (cdr c) :password)))
 	  (when server
 	    (let (connected)
 	      (dolist (p (rcirc-process-list))
@@ -421,7 +434,7 @@ If ARG is non-nil, instead prompt for connection parameters."
 	      (if (not connected)
 		  (condition-case e
 		      (rcirc-connect server port nick user-name
-				     full-name channels)
+				     full-name channels password)
 		    (quit (message "Quit connecting to %s" server)))
 		(with-current-buffer (process-buffer connected)
 		  (setq connected-servers
@@ -453,7 +466,7 @@ If ARG is non-nil, instead prompt for connection parameters."
 
 ;;;###autoload
 (defun rcirc-connect (server &optional port nick user-name full-name
-			     startup-channels)
+			     startup-channels password)
   (save-excursion
     (message "Connecting to %s..." server)
     (let* ((inhibit-eol-conversion)
@@ -502,6 +515,8 @@ If ARG is non-nil, instead prompt for connection parameters."
       (add-hook 'auto-save-hook 'rcirc-log-write)
 
       ;; identify
+      (when password
+        (rcirc-send-string process (concat "PASS " password)))
       (rcirc-send-string process (concat "NICK " nick))
       (rcirc-send-string process (concat "USER " user-name
                                       " hostname servername :"
@@ -884,7 +899,7 @@ This number is independent of the number of lines in the buffer.")
   (setq buffer-invisibility-spec '())
   (setq buffer-display-table (make-display-table))
   (set-display-table-slot buffer-display-table 4
-			  (let ((glyph (make-glyph-code 
+			  (let ((glyph (make-glyph-code
 					?. 'font-lock-keyword-face)))
 			    (make-vector 3 glyph)))
 
@@ -1036,7 +1051,7 @@ Create the buffer if it doesn't exist."
 			   (rcirc-generate-new-buffer-name process target))))
 	  (with-current-buffer new-buffer
 	    (rcirc-mode process target)
-	    (rcirc-put-nick-channel process (rcirc-nick process) target 
+	    (rcirc-put-nick-channel process (rcirc-nick process) target
 				    rcirc-current-line))
 	  new-buffer)))))
 
@@ -1121,7 +1136,7 @@ Create the buffer if it doesn't exist."
   (interactive)
   (let ((pos (1+ (- (point) rcirc-prompt-end-marker))))
     (goto-char (point-max))
-    (let ((text (buffer-substring-no-properties rcirc-prompt-end-marker 
+    (let ((text (buffer-substring-no-properties rcirc-prompt-end-marker
 						(point)))
           (parent (buffer-name)))
       (delete-region rcirc-prompt-end-marker (point))
@@ -1369,7 +1384,7 @@ record activity."
 			       (match-string 1 text)))
 			   rcirc-ignore-list))
 	       ;; do not ignore if we sent the message
- 	       (not (string= sender (rcirc-nick process))))    
+ 	       (not (string= sender (rcirc-nick process))))
     (let* ((buffer (rcirc-target-buffer process sender response target text))
 	   (inhibit-read-only t))
       (with-current-buffer buffer
@@ -2270,7 +2285,7 @@ keywords when no KEYWORD is given."
 				 rcirc-fill-column)
 				(t fill-column))
 			  ;; make sure ... doesn't cause line wrapping
-			  3)))		
+			  3)))
       (fill-region (point) (point-max) nil t))))
 
 ;;; handlers
