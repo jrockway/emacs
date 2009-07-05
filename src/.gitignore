@@ -1,6 +1,19 @@
 config.h
 epaths.h
 stamp_BLD
+Makefile
+*.o
+
+emacs
+temacs
+emacs-*
+
+
+Makefile.c
+bootstrap-emacs
+buildobj.lst
+prefix-args
+stamp-oldxmenu
 
 oo/
 oo-spd/
