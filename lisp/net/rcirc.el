@@ -2230,14 +2230,15 @@ keywords when no KEYWORD is given."
 
 (defun rcirc-markup-my-nick (sender response)
   (with-syntax-table rcirc-nick-syntax-table
-    (while (re-search-forward (concat "\\b"
+    (while (re-search-forward (concat "\\b\\("
 				      (regexp-quote (rcirc-nick
 						     (rcirc-buffer-process)))
-				      "\\b")
+				      "\\)\\(?:\\b\\|]\\)")
 			      nil t)
-      (rcirc-add-face (match-beginning 0) (match-end 0)
+      (rcirc-add-face (match-beginning 1) (match-end 1)
 		      'rcirc-nick-in-message)
-      (when (string= response "PRIVMSG")
+      (when (or (string= response "PRIVMSG")
+                (string= response "ACTION"))
 	(rcirc-add-face (point-min) (point-max)
 			'rcirc-nick-in-message-full-line)
 	(rcirc-record-activity (current-buffer) 'nick)))))
@@ -2253,7 +2254,8 @@ keywords when no KEYWORD is given."
       (push (buffer-substring-no-properties start end) rcirc-urls))))
 
 (defun rcirc-markup-keywords (sender response)
-  (when (and (string= response "PRIVMSG")
+  (when (and (or (string= response "PRIVMSG")
+                 (string= response "ACTION"))
 	     (not (string= sender (rcirc-nick (rcirc-buffer-process)))))
     (let* ((target (or rcirc-target ""))
 	   (keywords (delq nil (mapcar (lambda (keyword)
